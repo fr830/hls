@@ -62,6 +62,15 @@ namespace SwordsDance.Hls
 
         private enum ReaderState
         {
+            LineValue, // on any
+            TagValueOrAttributeName, // on colon
+            AttributeValue, // on equals sign
+            PostQuotedAttributeValue, // on double quote
+            AttributeName, // on comma
+            PostLineValue, // on newline
+
+            Error,
+            EndOfStream,
         }
 
         /// <summary>Gets the current line number.</summary>
@@ -93,21 +102,54 @@ namespace SwordsDance.Hls
         /// </returns>
         public bool Read()
         {
-            throw new NotImplementedException();
+            InitializeBuffer();
+
+            while (true)
+            {
+                switch (_state)
+                {
+                    case ReaderState.LineValue:
+                        ParseLineValue();
+                        return true;
+                    case ReaderState.TagValueOrAttributeName:
+                        ParseTagValueOrAttributeName();
+                        return true;
+                    case ReaderState.AttributeValue:
+                        ParseAttributeValue();
+                        return true;
+                    case ReaderState.PostQuotedAttributeValue:
+                        if (HandlePostQuotedAttributeValue()) continue;
+                        else return false;
+                    case ReaderState.AttributeName:
+                        ParseAttributeName();
+                        return true;
+                    case ReaderState.PostLineValue:
+                        if (HandlePostLineValue()) continue;
+                        else return false;
+                    case ReaderState.Error:
+                    case ReaderState.EndOfStream:
+                        return false;
+                    default:
+                        throw new InvalidOperationException("Unreachable code reached.");
+                }
+            }
         }
 
         /// <summary>Reads the next token in the playlist and returns it.</summary>
         /// <returns>The read token, or <c>null</c> if there are no more tokens to read.</returns>
-        public PlaylistToken? ReadToken()
-        {
-            throw new NotImplementedException();
-        }
+        public PlaylistToken? ReadToken() => Read() ? new PlaylistToken(TokenType, TokenValue) : (PlaylistToken?)null;
 
         /// <summary>Reads all remaining tokens in the playlist and returns them.</summary>
         /// <returns>An <see cref="IList{T}"/> containing the read tokens in the order they were read.</returns>
         public IList<PlaylistToken> ReadAllTokens()
         {
-            throw new NotImplementedException();
+            var tokens = new List<PlaylistToken>();
+            while (Read())
+            {
+                tokens.Add(new PlaylistToken(TokenType, TokenValue));
+            }
+
+            return tokens;
         }
 
         private void InitializeBuffer()
@@ -189,19 +231,380 @@ namespace SwordsDance.Hls
 
         private bool IsEndOfStream()
         {
-            // must only be called after reading a null character marking the end of the buffered data
+            // must only be called after reading an end of buffered data-marking null character
             Debug.Assert(_cursor == _bufferedLength);
             Debug.Assert(_buffer[_cursor] == '\0');
 
             return !BufferData(lookahead: 0);
         }
 
-        private bool IsCrLfNewline()
+        private bool IsCrLf()
         {
             // must only be called after reading a carriage return character
             Debug.Assert(_buffer[_cursor] == '\r');
 
             return HasLookahead(1) && _buffer[_cursor + 1] == '\n';
+        }
+
+        private void SetToken(PlaylistTokenType tokenType)
+        {
+            TokenType = tokenType;
+            TokenValue = new string(_buffer, _valueAnchor, _cursor - _valueAnchor);
+        }
+
+        private void ParseLineValue()
+        {
+            Debug.Assert(_state == ReaderState.LineValue);
+
+            ShiftBuffer();
+
+            while (true)
+            {
+                switch (_buffer[_cursor])
+                {
+                    case '\0' when IsEndOfBufferedData():
+                        if (IsEndOfStream())
+                        {
+                            // will be handled by the URI parsing procedure
+                            goto default;
+                        }
+                        else continue;
+                    case '#':
+                        if (HasLookahead(3)
+                            && _buffer[_cursor + 1] == 'E'
+                            && _buffer[_cursor + 2] == 'X'
+                            && _buffer[_cursor + 3] == 'T')
+                        {
+                            parseTagName();
+                            return;
+                        }
+                        else
+                        {
+                            parseComment();
+                            return;
+                        }
+                    default:
+                        parseUriOrBlank();
+                        return;
+                }
+            }
+
+            void parseTagName()
+            {
+                Debug.Assert(_buffer[_cursor] == '#');
+                Debug.Assert(_buffer[_cursor + 1] == 'E');
+                Debug.Assert(_buffer[_cursor + 2] == 'X');
+                Debug.Assert(_buffer[_cursor + 3] == 'T');
+
+                _valueAnchor = _cursor + 1;
+                _cursor += 4;
+
+                while (true)
+                {
+                    switch (_buffer[_cursor])
+                    {
+                        case '\0' when IsEndOfBufferedData():
+                            if (IsEndOfStream())
+                            {
+                                SetToken(PlaylistTokenType.TagName);
+                                _state = ReaderState.EndOfStream;
+                                return;
+                            }
+                            else continue;
+                        case '\r' when IsCrLf():
+                        case '\n':
+                            SetToken(PlaylistTokenType.TagName);
+                            _state = ReaderState.PostLineValue;
+                            return;
+                        case ':':
+                            SetToken(PlaylistTokenType.TagName);
+                            _state = ReaderState.TagValueOrAttributeName;
+                            return;
+                        default:
+                            _cursor++;
+                            continue;
+                    }
+                }
+            }
+
+            void parseComment()
+            {
+                Debug.Assert(_buffer[_cursor] == '#');
+
+                _valueAnchor = ++_cursor;
+
+                while (true)
+                {
+                    switch (_buffer[_cursor])
+                    {
+                        case '\0' when IsEndOfBufferedData():
+                            if (IsEndOfStream())
+                            {
+                                SetToken(PlaylistTokenType.Comment);
+                                _state = ReaderState.EndOfStream;
+                                return;
+                            }
+                            else continue;
+                        case '\r' when IsCrLf():
+                        case '\n':
+                            SetToken(PlaylistTokenType.Comment);
+                            _state = ReaderState.PostLineValue;
+                            return;
+                        default:
+                            _cursor++;
+                            continue;
+                    }
+                }
+            }
+
+            void parseUriOrBlank()
+            {
+                _valueAnchor = _cursor;
+
+                while (true)
+                {
+                    switch (_buffer[_cursor])
+                    {
+                        case '\0' when IsEndOfBufferedData():
+                            if (IsEndOfStream())
+                            {
+                                SetToken(determineTokenType());
+                                _state = ReaderState.EndOfStream;
+                                return;
+                            }
+                            else continue;
+                        case '\r' when IsCrLf():
+                        case '\n':
+                            SetToken(determineTokenType());
+                            _state = ReaderState.PostLineValue;
+                            return;
+                        default:
+                            _cursor++;
+                            continue;
+                    }
+                }
+
+                PlaylistTokenType determineTokenType()
+                {
+                    for (int i = _valueAnchor; i < _cursor; i++)
+                    {
+                        char ch = _buffer[i];
+                        if (ch != ' ' && (ch > 0xD || ch < 0x9)) return PlaylistTokenType.Uri;
+                    }
+
+                    return PlaylistTokenType.Blank;
+                }
+            }
+        }
+
+        private void ParseTagValueOrAttributeName()
+        {
+            Debug.Assert(_state == ReaderState.TagValueOrAttributeName);
+            Debug.Assert(_buffer[_cursor] == ':');
+
+            ShiftBuffer();
+
+            _valueAnchor = ++_cursor;
+
+            bool isDefinitelyTagName = false;
+            while (true)
+            {
+                switch (_buffer[_cursor])
+                {
+                    case '\0' when IsEndOfBufferedData():
+                        if (IsEndOfStream())
+                        {
+                            SetToken(PlaylistTokenType.TagValue);
+                            _state = ReaderState.EndOfStream;
+                            return;
+                        }
+                        else continue;
+                    case '\r' when IsCrLf():
+                    case '\n':
+                        SetToken(PlaylistTokenType.TagValue);
+                        _state = ReaderState.PostLineValue;
+                        return;
+                    case '=' when !isDefinitelyTagName:
+                        if (isValidAttributeName())
+                        {
+                            SetToken(PlaylistTokenType.AttributeName);
+                            _state = ReaderState.AttributeValue;
+                            return;
+                        }
+                        else
+                        {
+                            isDefinitelyTagName = true;
+                            goto default;
+                        }
+                    default:
+                        _cursor++;
+                        continue;
+                }
+            }
+
+            bool isValidAttributeName()
+            {
+                for (int i = _valueAnchor; i < _cursor; i++)
+                {
+                    char ch = _buffer[i];
+                    if ((ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') && ch != '-') return false;
+                }
+
+                return true;
+            }
+        }
+
+        private void ParseAttributeValue()
+        {
+            Debug.Assert(_state == ReaderState.AttributeValue);
+            Debug.Assert(_buffer[_cursor] == '=');
+
+            ShiftBuffer();
+
+            if (HasLookahead(1) && _buffer[_cursor + 1] == '"') // parse quoted value
+            {
+                _cursor += 2;
+                _valueAnchor = _cursor;
+
+                while (true)
+                {
+                    switch (_buffer[_cursor])
+                    {
+                        case '\0' when IsEndOfBufferedData():
+                            if (IsEndOfStream())
+                            {
+                                _state = ReaderState.Error;
+                                throw new FormatException(); // unexpected end of stream
+                            }
+                            else continue;
+                        case '\r' when IsCrLf():
+                        case '\n':
+                            _state = ReaderState.Error;
+                            throw new FormatException(); // unexpected newline
+                        case '"':
+                            SetToken(PlaylistTokenType.QuotedAttributeValue);
+                            _state = ReaderState.PostQuotedAttributeValue;
+                            return;
+                        default:
+                            _cursor++;
+                            continue;
+                    }
+                }
+            }
+            else // parse unquoted value
+            {
+                _valueAnchor = ++_cursor;
+
+                while (true)
+                {
+                    switch (_buffer[_cursor])
+                    {
+                        case '\0' when IsEndOfBufferedData():
+                            if (IsEndOfStream())
+                            {
+                                SetToken(PlaylistTokenType.UnquotedAttributeValue);
+                                _state = ReaderState.EndOfStream;
+                                return;
+                            }
+                            else continue;
+                        case '\r' when IsCrLf():
+                        case '\n':
+                            SetToken(PlaylistTokenType.UnquotedAttributeValue);
+                            _state = ReaderState.PostLineValue;
+                            return;
+                        case ',':
+                            SetToken(PlaylistTokenType.UnquotedAttributeValue);
+                            _state = ReaderState.AttributeName;
+                            return;
+                        default:
+                            _cursor++;
+                            continue;
+                    }
+                }
+            }
+        }
+
+        private bool HandlePostQuotedAttributeValue()
+        {
+            Debug.Assert(_state == ReaderState.PostQuotedAttributeValue);
+            Debug.Assert(_buffer[_cursor] == '"');
+
+            ShiftBuffer();
+
+            _cursor++;
+
+            while (true)
+            {
+                switch (_buffer[_cursor])
+                {
+                    case '\0' when IsEndOfBufferedData():
+                        if (IsEndOfStream())
+                        {
+                            _state = ReaderState.EndOfStream;
+                            return false;
+                        }
+                        else continue;
+                    case '\r' when IsCrLf():
+                    case '\n':
+                        _state = ReaderState.PostLineValue;
+                        return true;
+                    case ',':
+                        _state = ReaderState.AttributeName;
+                        return true;
+                    default:
+                        _state = ReaderState.Error;
+                        throw new FormatException(); // unexpected character
+                }
+            }
+        }
+
+        private void ParseAttributeName()
+        {
+            Debug.Assert(_state == ReaderState.AttributeName);
+            Debug.Assert(_buffer[_cursor] == ',');
+
+            ShiftBuffer();
+
+            _valueAnchor = ++_cursor;
+
+            while (true)
+            {
+                switch (_buffer[_cursor])
+                {
+                    case '\0' when IsEndOfBufferedData():
+                        if (IsEndOfStream())
+                        {
+                            _state = ReaderState.Error;
+                            throw new FormatException(); // unexpected end of stream
+                        }
+                        else continue;
+                    case '\r' when IsCrLf():
+                    case '\n':
+                        _state = ReaderState.Error;
+                        throw new FormatException(); // unexpected newline
+                    case '=':
+                        SetToken(PlaylistTokenType.AttributeName);
+                        _state = ReaderState.AttributeValue;
+                        return;
+                    default:
+                        _cursor++;
+                        continue;
+                }
+            }
+        }
+
+        private bool HandlePostLineValue()
+        {
+            Debug.Assert(_state == ReaderState.PostLineValue);
+            Debug.Assert(_buffer[_cursor] == '\n' || _buffer[_cursor] == '\r' && _buffer[_cursor + 1] == '\n');
+
+            _cursor += _buffer[_cursor] == '\r' ? 2 : 1;
+            _lineNumber++;
+            _lineAnchor = _cursor;
+
+            _state = ReaderState.LineValue;
+
+            return true;
         }
 
         #region IDisposable
