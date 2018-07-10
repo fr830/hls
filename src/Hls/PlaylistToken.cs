@@ -20,8 +20,8 @@
         /// <summary>Gets the value of the token.</summary>
         public string Value { get; }
 
-        /// <summary>Returns the string representation of the current <see cref="PlaylistToken"/> instance.</summary>
-        /// <returns>The string representation of the current <see cref="PlaylistToken"/> instance.</returns>
+        /// <summary>Returns the string representation of the token.</summary>
+        /// <returns>The string representation of the token.</returns>
         public override string ToString() => "[" + Type + ": " + Value + "]";
     }
 }

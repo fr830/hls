@@ -24,13 +24,16 @@ namespace SwordsDance.Hls
         private ReaderState _state;
 
         /// <summary>
-        /// Initializes a new <see cref="PlaylistTextReader"/> instance with the specified <see cref="TextReader"/>.
+        /// Initializes a new <see cref="PlaylistTextReader"/> with the specified string data.
         /// </summary>
-        /// <param name="textReader">The <see cref="TextReader"/> containing HLS playlist data to be read.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="textReader"/> is <c>null</c>.</exception>
-        public PlaylistTextReader(TextReader textReader)
+        /// <param name="data">The string containing HLS playlist data to be read.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is <c>null</c>.</exception>
+        public PlaylistTextReader(string data)
         {
-            _reader = textReader ?? throw new ArgumentNullException(nameof(textReader));
+            if (data == null) throw new ArgumentNullException(nameof(data));
+
+            _reader = new StringReader(data);
+            _shouldDisposeReader = true;
         }
 
         /// <summary>
@@ -48,16 +51,13 @@ namespace SwordsDance.Hls
         }
 
         /// <summary>
-        /// Initializes a new <see cref="PlaylistTextReader"/> with the specified string data.
+        /// Initializes a new <see cref="PlaylistTextReader"/> instance with the specified <see cref="TextReader"/>.
         /// </summary>
-        /// <param name="data">The string containing HLS playlist data to be read.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="data"/> is <c>null</c>.</exception>
-        public PlaylistTextReader(string data)
+        /// <param name="textReader">The <see cref="TextReader"/> containing HLS playlist data to be read.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="textReader"/> is <c>null</c>.</exception>
+        public PlaylistTextReader(TextReader textReader)
         {
-            if (data == null) throw new ArgumentNullException(nameof(data));
-
-            _reader = new StringReader(data);
-            _shouldDisposeReader = true;
+            _reader = textReader ?? throw new ArgumentNullException(nameof(textReader));
         }
 
         private enum ReaderState
@@ -73,12 +73,8 @@ namespace SwordsDance.Hls
             EndOfStream,
         }
 
-        /// <summary>Gets the current line number.</summary>
-        /// <remarks>
-        /// The returned value reflects the 1-based index of the line containing the character immediately following
-        /// the most recently read token.
-        /// </remarks>
-        public int Line => _lineNumber + 1;
+        /// <summary>Gets a boolean value indicating whether a UTF-8 byte order mark has been detected.</summary>
+        public bool ByteOrderMarkDetected => _utf8 != null && ((StreamReader)_reader).CurrentEncoding != _utf8;
 
         /// <summary>Gets the current character position.</summary>
         /// <remarks>
@@ -87,14 +83,18 @@ namespace SwordsDance.Hls
         /// </remarks>
         public int Column => _cursor - _lineAnchor + 1;
 
+        /// <summary>Gets the current line number.</summary>
+        /// <remarks>
+        /// The returned value reflects the 1-based index of the line containing the character immediately following
+        /// the most recently read token.
+        /// </remarks>
+        public int Line => _lineNumber + 1;
+
         /// <summary>Gets the type of the most recently read token.</summary>
         public PlaylistTokenType TokenType { get; private set; }
 
         /// <summary>Gets the value of the most recently read token.</summary>
         public string TokenValue { get; private set; }
-
-        /// <summary>Gets a boolean value indicating whether a UTF-8 byte order mark has been detected.</summary>
-        public bool ByteOrderMarkDetected => _utf8 != null && ((StreamReader)_reader).CurrentEncoding != _utf8;
 
         /// <summary>Reads the next token in the playlist.</summary>
         /// <returns>
@@ -135,12 +135,8 @@ namespace SwordsDance.Hls
             }
         }
 
-        /// <summary>Reads the next token in the playlist and returns it.</summary>
-        /// <returns>The read token, or <c>null</c> if there are no more tokens to read.</returns>
-        public PlaylistToken? ReadToken() => Read() ? new PlaylistToken(TokenType, TokenValue) : (PlaylistToken?)null;
-
         /// <summary>Reads all remaining tokens in the playlist and returns them.</summary>
-        /// <returns>An <see cref="IList{T}"/> containing the read tokens in the order they were read.</returns>
+        /// <returns>A <see cref="IList{T}"/> containing the read tokens in the order they were read.</returns>
         public IList<PlaylistToken> ReadAllTokens()
         {
             var tokens = new List<PlaylistToken>();
@@ -151,6 +147,10 @@ namespace SwordsDance.Hls
 
             return tokens;
         }
+
+        /// <summary>Reads the next token in the playlist and returns it.</summary>
+        /// <returns>The read token, or <c>null</c> if there are no more tokens to read.</returns>
+        public PlaylistToken? ReadToken() => Read() ? new PlaylistToken(TokenType, TokenValue) : (PlaylistToken?)null;
 
         private void InitializeBuffer()
         {
@@ -615,6 +615,13 @@ namespace SwordsDance.Hls
         /// <summary>Releases all resources used by the reader.</summary>
         public void Dispose() => Dispose(true);
 
+        /// <summary>
+        /// Releases unmanaged and optionally managed resources used by the reader.
+        /// </summary>
+        /// <param name="disposing">
+        /// <c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only
+        /// unmanaged resources.
+        /// </param>
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposed)
