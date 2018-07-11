@@ -1,7 +1,7 @@
 ﻿namespace SwordsDance.Hls
 {
     /// <summary>Defines an HLS playlist token.</summary>
-    public readonly struct PlaylistToken
+    public class PlaylistToken
     {
         /// <summary>
         /// Initializes a new <see cref="PlaylistToken"/> instance with the specified type and value.
