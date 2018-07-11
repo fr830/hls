@@ -3,7 +3,7 @@
   <PropertyGroup>
 
     <AssemblyName>SwordsDance.Hls</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
 
     <LangVersion>latest</LangVersion>
     <TargetFramework>netcoreapp2.1</TargetFramework>
@@ -13,7 +13,7 @@
     <Authors>qbicfeet</Authors>
     <Company>swords.dance</Company>
     <Copyright>Copyright 2018 qbicfeet &lt;qbicfeet@swords.dance&gt;</Copyright>
-    <Description>Utilities for reading HLS (HTTP Live Streaming) playlists.</Description>
+    <Description>Utilities for parsing HLS (HTTP Live Streaming) playlists.</Description>
     <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/swords-dance/hls</PackageProjectUrl>
     <PackageTags>swordsdance;swords;dance;hls;http;live;streaming;playlist;playlists;m3u;m3u8</PackageTags>
