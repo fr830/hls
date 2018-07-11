@@ -8,6 +8,8 @@
         /// </summary>
         /// <param name="type">The type of the token.</param>
         /// <param name="value">The value of the token.</param>
+        /// <param name="line">The line number of the token.</param>
+        /// <param name="column">The character position of the token.</param>
         public PlaylistToken(PlaylistTokenType type, string value, int line, int column)
         {
             Type = type;
