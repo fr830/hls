@@ -8,7 +8,8 @@ Utilities for parsing HLS (HTTP Live Streaming) playlists.
 Features
 --------
 
-None.
+* Read data from HLS playlists into typed tokens, complete with line and
+  column information to facilitate debugging.
 
 Dependencies
 ------------
