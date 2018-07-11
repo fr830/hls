@@ -12,6 +12,9 @@
         /// <summary>A URI or blank line.</summary>
         Uri,
 
+        /// <summary>A comment marker (<c>#</c>).</summary>
+        CommentMarker,
+
         /// <summary>A comment.</summary>
         Comment,
 
@@ -30,16 +33,22 @@
         /// <summary>An attribute name/value separator (<c>=</c>).</summary>
         AttributeNameValueSeparator,
 
-        /// <summary>A quoted attribute value.</summary>
-        QuotedAttributeValue,
+        /// <summary>An attribute value.</summary>
+        AttributeValue,
 
-        /// <summary>An unquoted attribute value.</summary>
-        UnquotedAttributeValue,
+        /// <summary>A quoted attribute value marker (<c>"</c>).</summary>
+        QuotedAttributeValueMarker,
+
+        /// <summary>A quoted attribute value terminator (<c>"</c>).</summary>
+        QuotedAttributeValueTerminator,
+
+        /// <summary>Unexpected post quoted attribute value terminator data.</summary>
+        UnexpectedPostQuotedAttributeValueTerminatorData,
 
         /// <summary>An attribute separator (<c>,</c>).</summary>
         AttributeSeparator,
 
-        /// <summary>A line value terminator (LF or CR+LF).</summary>
-        LineValueTerminator,
+        /// <summary>A newline-terminated value terminator (LF or CR+LF).</summary>
+        NewlineTerminatedValueTerminator,
     }
 }
