@@ -1,4 +1,6 @@
-﻿namespace SwordsDance.Hls
+﻿using SwordsDance.Hls.Internal;
+
+namespace SwordsDance.Hls
 {
     /// <summary>Defines an HLS playlist token.</summary>
     public class PlaylistToken
@@ -39,6 +41,14 @@
 
         /// <summary>Returns the string representation of the token.</summary>
         /// <returns>The string representation of the token.</returns>
-        public override string ToString() => "[" + Type + "] " + Value + " (" + Line + ", " + Column + ")";
+        public override string ToString() => "["
+            + Type
+            + "] "
+            + StringHelper.ToDebugString(Value)
+            + " ("
+            + Line
+            + ", "
+            + Column
+            + ")";
     }
 }
