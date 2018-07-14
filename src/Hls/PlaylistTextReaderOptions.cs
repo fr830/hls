@@ -10,12 +10,9 @@ namespace SwordsDance.Hls
         None = 0,
 
         /// <summary>
-        /// Specifies that <see cref="PlaylistTextReader.Read"/> should emit all tokens it reads, including markers,
-        /// separators, terminators and end-of-line sequences.
+        /// Specifies that <see cref="PlaylistTextReader.Read"/> and derivative methods should emit all tokens read,
+        /// including markers, separators, terminators and end-of-line sequences.
         /// </summary>
         Verbose = 1 << 0,
-
-        /// <summary>The default set of options used by <see cref="PlaylistTextReader"/> instances.</summary>
-        Default = Verbose,
     }
 }

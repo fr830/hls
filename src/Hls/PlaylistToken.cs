@@ -11,7 +11,7 @@ namespace SwordsDance.Hls
         /// <param name="type">The type of the token.</param>
         /// <param name="value">The value of the token.</param>
         /// <param name="line">The line number of the token.</param>
-        /// <param name="column">The character position of the token.</param>
+        /// <param name="column">The line position of the token.</param>
         public PlaylistToken(PlaylistTokenType type, string value, int line, int column)
         {
             Type = type;
@@ -20,7 +20,7 @@ namespace SwordsDance.Hls
             Column = column;
         }
 
-        /// <summary>Gets the character position of the token.</summary>
+        /// <summary>Gets the line position of the token.</summary>
         /// <remarks>
         /// The returned value reflects the 1-based index of the first character of the value of the token.
         /// </remarks>

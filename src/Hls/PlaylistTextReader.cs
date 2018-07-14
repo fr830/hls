@@ -36,10 +36,12 @@ namespace SwordsDance.Hls
         /// <exception cref="ArgumentNullException"><paramref name="textReader"/> is <c>null</c>.</exception>
         public PlaylistTextReader(
             TextReader textReader,
-            PlaylistTextReaderOptions options = PlaylistTextReaderOptions.Default)
+            PlaylistTextReaderOptions options = PlaylistTextReaderOptions.None)
         {
             _reader = textReader ?? throw new ArgumentNullException(nameof(textReader));
             _verbose = options.HasFlag(PlaylistTextReaderOptions.Verbose);
+
+            Errors = new List<PlaylistError>();
         }
 
         private enum ReaderState
@@ -60,12 +62,18 @@ namespace SwordsDance.Hls
             Finished,
         }
 
-        /// <summary>Gets the current character position.</summary>
+        /// <summary>Gets the current line position.</summary>
         /// <remarks>
         /// The returned value reflects the 1-based index of the character immediately following the most recently
         /// read token.
         /// </remarks>
         public int Column => _cursor - _lineAnchor + 1;
+
+        /// <summary>Gets an <see cref="IList{T}"/> of any errors that have been encountered while reading.</summary>
+        public IList<PlaylistError> Errors { get; }
+
+        /// <summary>Gets a boolean value indicating whether any errors have been encountered while reading.</summary>
+        public bool HasErrors => Errors.Count > 0;
 
         /// <summary>Gets the current line number.</summary>
         /// <remarks>
@@ -74,7 +82,7 @@ namespace SwordsDance.Hls
         /// </remarks>
         public int Line => _lineNumber + 1;
 
-        /// <summary>Gets the character position of the most recently read token.</summary>
+        /// <summary>Gets the line position of the most recently read token.</summary>
         /// <remarks>
         /// The returned value reflects the 1-based index of the first character of the value of the token.
         /// </remarks>
@@ -278,6 +286,11 @@ namespace SwordsDance.Hls
             TokenValue = new string(_buffer, _tokenAnchor, _cursor - _tokenAnchor);
             TokenLine = _tokenLine;
             TokenColumn = _tokenColumn;
+        }
+
+        private void EmitError(string description)
+        {
+            Errors.Add(new PlaylistError(description, Line, Column));
         }
 
         private bool ParseUriOrCommentMarker()
@@ -542,6 +555,7 @@ namespace SwordsDance.Hls
                     case '\0' when IsEndOfBufferedData():
                         if (IsEndOfFile())
                         {
+                            EmitError("Encountered end-of-file while reading quoted attribute value; expected quotation mark.");
                             SetToken(PlaylistTokenType.QuotedAttributeValue);
                             _state = ReaderState.EndOfFile;
                             return true;
@@ -549,6 +563,7 @@ namespace SwordsDance.Hls
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
+                        EmitError("Encountered end-of-line while reading quoted attribute value; expected quotation mark.");
                         SetToken(PlaylistTokenType.QuotedAttributeValue);
                         _state = ReaderState.EndOfLine;
                         return true;
@@ -593,6 +608,7 @@ namespace SwordsDance.Hls
                         _state = ReaderState.AttributeSeparator;
                         return _verbose;
                     default:
+                        EmitError("Encountered unexpected data while reading quoted attribute value terminator; expected comma, end-of-line or end-of-file.");
                         SetToken(PlaylistTokenType.QuotedAttributeValueTerminator);
                         _state = ReaderState.UnexpectedPostQuotedAttributeValueTerminatorData;
                         return _verbose;
