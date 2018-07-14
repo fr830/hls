@@ -9,7 +9,7 @@
         /// </summary>
         None,
 
-        /// <summary>A URI or blank line.</summary>
+        /// <summary>A URI.</summary>
         Uri,
 
         /// <summary>A comment marker (<c>#</c>).</summary>
@@ -33,22 +33,28 @@
         /// <summary>An attribute name/value separator (<c>=</c>).</summary>
         AttributeNameValueSeparator,
 
-        /// <summary>An attribute value.</summary>
+        /// <summary>An unquoted attribute value.</summary>
         AttributeValue,
 
         /// <summary>A quoted attribute value marker (<c>"</c>).</summary>
         QuotedAttributeValueMarker,
 
+        /// <summary>A quoted attribute value.</summary>
+        QuotedAttributeValue,
+
         /// <summary>A quoted attribute value terminator (<c>"</c>).</summary>
         QuotedAttributeValueTerminator,
 
-        /// <summary>Unexpected post quoted attribute value terminator data.</summary>
-        UnexpectedPostQuotedAttributeValueTerminatorData,
+        /// <summary>Unexpected data.</summary>
+        UnexpectedData,
 
         /// <summary>An attribute separator (<c>,</c>).</summary>
         AttributeSeparator,
 
-        /// <summary>A newline-terminated value terminator (LF or CR+LF).</summary>
-        NewlineTerminatedValueTerminator,
+        /// <summary>An end-of-line sequence (<c>LF</c> or <c>CR+LF</c>).</summary>
+        EndOfLine,
+
+        /// <summary>An end-of-file marker.</summary>
+        EndOfFile,
     }
 }

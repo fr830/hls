@@ -50,9 +50,8 @@ namespace SwordsDance.Hls.Internal
                         continue;
                 }
             }
-            sb.Append('"');
 
-            return sb.ToString();
+            return sb.Append('"').ToString();
         }
     }
 }
