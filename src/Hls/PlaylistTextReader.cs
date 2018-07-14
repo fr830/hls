@@ -11,6 +11,7 @@ namespace SwordsDance.Hls
         private const int DefaultBufferSize = 4096 / sizeof(char);
 
         private readonly TextReader _reader;
+        private readonly bool _verbose;
 
         private char[] _buffer;
         private int _bufferedLength;
@@ -29,10 +30,16 @@ namespace SwordsDance.Hls
         /// Initializes a new <see cref="PlaylistTextReader"/> instance with the specified <see cref="TextReader"/>.
         /// </summary>
         /// <param name="textReader">The <see cref="TextReader"/> containing HLS playlist data to be read.</param>
+        /// <param name="options">
+        /// The set of options to be used by the new <see cref="PlaylistTextReader"/> instance.
+        /// </param>
         /// <exception cref="ArgumentNullException"><paramref name="textReader"/> is <c>null</c>.</exception>
-        public PlaylistTextReader(TextReader textReader)
+        public PlaylistTextReader(
+            TextReader textReader,
+            PlaylistTextReaderOptions options = PlaylistTextReaderOptions.Default)
         {
             _reader = textReader ?? throw new ArgumentNullException(nameof(textReader));
+            _verbose = options.HasFlag(PlaylistTextReaderOptions.Verbose);
         }
 
         private enum ReaderState
@@ -99,44 +106,44 @@ namespace SwordsDance.Hls
                 switch (_state)
                 {
                     case ReaderState.UriOrCommentMarker:
-                        ParseUriOrCommentMarker();
-                        return true;
+                        if (ParseUriOrCommentMarker()) return true;
+                        else continue;
                     case ReaderState.CommentOrTagName:
-                        ParseCommentOrTagName();
-                        return true;
+                        if (ParseCommentOrTagName()) return true;
+                        else continue;
                     case ReaderState.TagNameValueSeparator:
-                        ParseTagNameValueSeparator();
-                        return true;
+                        if (ParseTagNameValueSeparator()) return true;
+                        else continue;
                     case ReaderState.TagValueOrAttributeName:
-                        ParseTagValueOrAttributeName();
-                        return true;
+                        if (ParseTagValueOrAttributeName()) return true;
+                        else continue;
                     case ReaderState.AttributeNameValueSeparator:
-                        ParseAttributeNameValueSeparator();
-                        return true;
+                        if (ParseAttributeNameValueSeparator()) return true;
+                        else continue;
                     case ReaderState.AttributeValueOrQuotedAttributeValueMarker:
-                        ParseAttributeValueOrQuotedAttributeValueMarker();
-                        return true;
+                        if (ParseAttributeValueOrQuotedAttributeValueMarker()) return true;
+                        else continue;
                     case ReaderState.QuotedAttributeValue:
-                        ParseQuotedAttributeValue();
-                        return true;
+                        if (ParseQuotedAttributeValue()) return true;
+                        else continue;
                     case ReaderState.QuotedAttributeValueTerminator:
-                        ParseQuotedAttributeValueTerminator();
-                        return true;
+                        if (ParseQuotedAttributeValueTerminator()) return true;
+                        else continue;
                     case ReaderState.UnexpectedPostQuotedAttributeValueTerminatorData:
-                        ParseUnexpectedPostQuotedAttributeValueTerminatorData();
-                        return true;
+                        if (ParseUnexpectedPostQuotedAttributeValueTerminatorData()) return true;
+                        else continue;
                     case ReaderState.AttributeSeparator:
-                        ParseAttributeSeparator();
-                        return true;
+                        if (ParseAttributeSeparator()) return true;
+                        else continue;
                     case ReaderState.AttributeName:
-                        ParseAttributeName();
-                        return true;
+                        if (ParseAttributeName()) return true;
+                        else continue;
                     case ReaderState.EndOfLine:
-                        ParseEndOfLine();
-                        return true;
+                        if (ParseEndOfLine()) return true;
+                        else continue;
                     case ReaderState.EndOfFile:
-                        ParseEndOfFile();
-                        return true;
+                        if (ParseEndOfFile()) return true;
+                        else continue;
                     case ReaderState.Finished:
                         return false;
                     default:
@@ -273,7 +280,7 @@ namespace SwordsDance.Hls
             TokenColumn = _tokenColumn;
         }
 
-        private void ParseUriOrCommentMarker()
+        private bool ParseUriOrCommentMarker()
         {
             ShiftBuffer();
             InitializeToken();
@@ -285,24 +292,20 @@ namespace SwordsDance.Hls
                     case '\0' when IsEndOfBufferedData():
                         if (IsEndOfFile())
                         {
-                            ParseEndOfFile();
-                            return;
+                            return ParseEndOfFile();
                         }
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
-                        ParseEndOfLine();
-                        return;
+                        return ParseEndOfLine();
                     case '#':
-                        parseCommentMarker();
-                        return;
+                        return parseCommentMarker();
                     default:
-                        parseUri();
-                        return;
+                        return parseUri();
                 }
             }
 
-            void parseUri()
+            bool parseUri()
             {
                 while (true)
                 {
@@ -313,14 +316,14 @@ namespace SwordsDance.Hls
                             {
                                 SetToken(PlaylistTokenType.Uri);
                                 _state = ReaderState.EndOfFile;
-                                return;
+                                return true;
                             }
                             else continue;
                         case '\r' when IsCrLf():
                         case '\n':
                             SetToken(PlaylistTokenType.Uri);
                             _state = ReaderState.EndOfLine;
-                            return;
+                            return true;
                         default:
                             _cursor++;
                             continue;
@@ -328,17 +331,19 @@ namespace SwordsDance.Hls
                 }
             }
 
-            void parseCommentMarker()
+            bool parseCommentMarker()
             {
                 Debug.Assert(_buffer[_cursor] == '#');
 
                 _cursor++;
                 SetToken(PlaylistTokenType.CommentMarker);
                 _state = ReaderState.CommentOrTagName;
+
+                return _verbose;
             }
         }
 
-        private void ParseCommentOrTagName()
+        private bool ParseCommentOrTagName()
         {
             ShiftBuffer();
             InitializeToken();
@@ -359,18 +364,18 @@ namespace SwordsDance.Hls
                             {
                                 SetToken(PlaylistTokenType.TagName);
                                 _state = ReaderState.EndOfFile;
-                                return;
+                                return true;
                             }
                             else continue;
                         case '\r' when IsCrLf():
                         case '\n':
                             SetToken(PlaylistTokenType.TagName);
                             _state = ReaderState.EndOfLine;
-                            return;
+                            return true;
                         case ':':
                             SetToken(PlaylistTokenType.TagName);
                             _state = ReaderState.TagNameValueSeparator;
-                            return;
+                            return true;
                         default:
                             _cursor++;
                             continue;
@@ -388,14 +393,14 @@ namespace SwordsDance.Hls
                             {
                                 SetToken(PlaylistTokenType.Comment);
                                 _state = ReaderState.EndOfFile;
-                                return;
+                                return true;
                             }
                             else continue;
                         case '\r' when IsCrLf():
                         case '\n':
                             SetToken(PlaylistTokenType.Comment);
                             _state = ReaderState.EndOfLine;
-                            return;
+                            return true;
                         default:
                             _cursor++;
                             continue;
@@ -404,7 +409,7 @@ namespace SwordsDance.Hls
             }
         }
 
-        private void ParseTagNameValueSeparator()
+        private bool ParseTagNameValueSeparator()
         {
             Debug.Assert(_buffer[_cursor] == ':');
 
@@ -412,9 +417,11 @@ namespace SwordsDance.Hls
             _cursor++;
             SetToken(PlaylistTokenType.TagNameValueSeparator);
             _state = ReaderState.TagValueOrAttributeName;
+
+            return _verbose;
         }
 
-        private void ParseTagValueOrAttributeName()
+        private bool ParseTagValueOrAttributeName()
         {
             ShiftBuffer();
             InitializeToken();
@@ -429,20 +436,20 @@ namespace SwordsDance.Hls
                         {
                             SetToken(PlaylistTokenType.TagValue);
                             _state = ReaderState.EndOfFile;
-                            return;
+                            return true;
                         }
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
                         SetToken(PlaylistTokenType.TagValue);
                         _state = ReaderState.EndOfLine;
-                        return;
+                        return true;
                     case '=' when !isDefinitelyTagName:
                         if (isValidAttributeName())
                         {
                             SetToken(PlaylistTokenType.AttributeName);
                             _state = ReaderState.AttributeNameValueSeparator;
-                            return;
+                            return true;
                         }
                         else
                         {
@@ -467,7 +474,7 @@ namespace SwordsDance.Hls
             }
         }
 
-        private void ParseAttributeNameValueSeparator()
+        private bool ParseAttributeNameValueSeparator()
         {
             Debug.Assert(_buffer[_cursor] == '=');
 
@@ -475,9 +482,11 @@ namespace SwordsDance.Hls
             _cursor++;
             SetToken(PlaylistTokenType.AttributeNameValueSeparator);
             _state = ReaderState.AttributeValueOrQuotedAttributeValueMarker;
+
+            return _verbose;
         }
 
-        private void ParseAttributeValueOrQuotedAttributeValueMarker()
+        private bool ParseAttributeValueOrQuotedAttributeValueMarker()
         {
             ShiftBuffer();
             InitializeToken();
@@ -487,6 +496,8 @@ namespace SwordsDance.Hls
                 _cursor++;
                 SetToken(PlaylistTokenType.QuotedAttributeValueMarker);
                 _state = ReaderState.QuotedAttributeValue;
+
+                return _verbose;
             }
             else // parse attribute value
             {
@@ -499,18 +510,18 @@ namespace SwordsDance.Hls
                             {
                                 SetToken(PlaylistTokenType.AttributeValue);
                                 _state = ReaderState.EndOfFile;
-                                return;
+                                return true;
                             }
                             else continue;
                         case '\r' when IsCrLf():
                         case '\n':
                             SetToken(PlaylistTokenType.AttributeValue);
                             _state = ReaderState.EndOfLine;
-                            return;
+                            return true;
                         case ',':
                             SetToken(PlaylistTokenType.AttributeValue);
                             _state = ReaderState.AttributeSeparator;
-                            return;
+                            return true;
                         default:
                             _cursor++;
                             continue;
@@ -519,7 +530,7 @@ namespace SwordsDance.Hls
             }
         }
 
-        private void ParseQuotedAttributeValue()
+        private bool ParseQuotedAttributeValue()
         {
             ShiftBuffer();
             InitializeToken();
@@ -533,18 +544,18 @@ namespace SwordsDance.Hls
                         {
                             SetToken(PlaylistTokenType.QuotedAttributeValue);
                             _state = ReaderState.EndOfFile;
-                            return;
+                            return true;
                         }
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
                         SetToken(PlaylistTokenType.QuotedAttributeValue);
                         _state = ReaderState.EndOfLine;
-                        return;
+                        return true;
                     case '"':
                         SetToken(PlaylistTokenType.QuotedAttributeValue);
                         _state = ReaderState.QuotedAttributeValueTerminator;
-                        return;
+                        return true;
                     default:
                         _cursor++;
                         continue;
@@ -552,7 +563,7 @@ namespace SwordsDance.Hls
             }
         }
 
-        private void ParseQuotedAttributeValueTerminator()
+        private bool ParseQuotedAttributeValueTerminator()
         {
             Debug.Assert(_buffer[_cursor] == '"');
 
@@ -569,27 +580,27 @@ namespace SwordsDance.Hls
                         {
                             SetToken(PlaylistTokenType.QuotedAttributeValueTerminator);
                             _state = ReaderState.EndOfFile;
-                            return;
+                            return _verbose;
                         }
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
                         SetToken(PlaylistTokenType.QuotedAttributeValueTerminator);
                         _state = ReaderState.EndOfLine;
-                        return;
+                        return _verbose;
                     case ',':
                         SetToken(PlaylistTokenType.QuotedAttributeValueTerminator);
                         _state = ReaderState.AttributeSeparator;
-                        return;
+                        return _verbose;
                     default:
                         SetToken(PlaylistTokenType.QuotedAttributeValueTerminator);
                         _state = ReaderState.UnexpectedPostQuotedAttributeValueTerminatorData;
-                        return;
+                        return _verbose;
                 }
             }
         }
 
-        private void ParseUnexpectedPostQuotedAttributeValueTerminatorData()
+        private bool ParseUnexpectedPostQuotedAttributeValueTerminatorData()
         {
             ShiftBuffer();
             InitializeToken();
@@ -603,18 +614,18 @@ namespace SwordsDance.Hls
                         {
                             SetToken(PlaylistTokenType.UnexpectedData);
                             _state = ReaderState.EndOfFile;
-                            return;
+                            return _verbose;
                         }
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
                         SetToken(PlaylistTokenType.UnexpectedData);
                         _state = ReaderState.EndOfLine;
-                        return;
+                        return _verbose;
                     case ',':
                         SetToken(PlaylistTokenType.UnexpectedData);
                         _state = ReaderState.AttributeSeparator;
-                        return;
+                        return _verbose;
                     default:
                         _cursor++;
                         continue;
@@ -622,7 +633,7 @@ namespace SwordsDance.Hls
             }
         }
 
-        private void ParseAttributeSeparator()
+        private bool ParseAttributeSeparator()
         {
             Debug.Assert(_buffer[_cursor] == ',');
 
@@ -630,9 +641,11 @@ namespace SwordsDance.Hls
             _cursor++;
             SetToken(PlaylistTokenType.AttributeSeparator);
             _state = ReaderState.AttributeName;
+
+            return _verbose;
         }
 
-        private void ParseAttributeName()
+        private bool ParseAttributeName()
         {
             ShiftBuffer();
             InitializeToken();
@@ -646,18 +659,18 @@ namespace SwordsDance.Hls
                         {
                             SetToken(PlaylistTokenType.AttributeName);
                             _state = ReaderState.EndOfFile;
-                            return;
+                            return true;
                         }
                         else continue;
                     case '\r' when IsCrLf():
                     case '\n':
                         SetToken(PlaylistTokenType.AttributeName);
                         _state = ReaderState.EndOfLine;
-                        return;
+                        return true;
                     case '=':
                         SetToken(PlaylistTokenType.AttributeName);
                         _state = ReaderState.AttributeNameValueSeparator;
-                        return;
+                        return true;
                     default:
                         _cursor++;
                         continue;
@@ -665,7 +678,7 @@ namespace SwordsDance.Hls
             }
         }
 
-        private void ParseEndOfLine()
+        private bool ParseEndOfLine()
         {
             Debug.Assert(_buffer[_cursor] == '\n' || _buffer[_cursor] == '\r' && _buffer[_cursor + 1] == '\n');
 
@@ -676,13 +689,17 @@ namespace SwordsDance.Hls
 
             _lineNumber++;
             _lineAnchor = _cursor;
+
+            return _verbose;
         }
 
-        private void ParseEndOfFile()
+        private bool ParseEndOfFile()
         {
             InitializeToken();
             SetToken(PlaylistTokenType.EndOfFile);
             _state = ReaderState.Finished;
+
+            return true;
         }
     }
 }
